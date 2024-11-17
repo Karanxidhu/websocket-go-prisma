@@ -1,0 +1,33 @@
+datasource db {
+    // could be postgresql or mysql
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+
+}
+
+generator db {
+    provider = "go run github.com/steebchen/prisma-client-go"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Room {
+  id          String      @id @default(cuid())
+  name        String
+  createdAt   DateTime    @default(now())
+  mediaFiles  MediaFile[]
+}
+
+model MediaFile {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  type      String   
+  uploadedAt DateTime @default(now())
+  roomId    String
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
