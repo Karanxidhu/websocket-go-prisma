@@ -25,12 +25,12 @@ func (controller *UserController) Save(w http.ResponseWriter, r *http.Request) {
 	userCreateReq := request.UserCreateReq{}
 	helper.ReadRequest(r, &userCreateReq)
 	fmt.Println(userCreateReq.Username)
-	controller.UserService.Save(r.Context(), userCreateReq)
+	token := controller.UserService.Save(r.Context(), userCreateReq)
 
 	webresponse := response.WebResponse{
 		Code:    200,
 		Message: "OK",
-		Data:    userCreateReq,
+		Data:    token,
 	}
 	helper.WriteResponse(w, webresponse)
 }

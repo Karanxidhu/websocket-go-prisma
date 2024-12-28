@@ -13,6 +13,8 @@ const (
 	JoinEvent = "join"
 	LeaveEvent = "leave"
 	MessageEvent = "message"
+	File = "file"
+	WelcomeEvent = "welcome"
 )
 
 type Join struct{
@@ -26,4 +28,9 @@ type Leave struct{
 type Message struct{
 	Name string `json:"name"`
 	Message string `json:"message"`
+}
+
+type FileUpload struct{
+	Name string `json:"name"`
+	File string `json:"file"`
 }

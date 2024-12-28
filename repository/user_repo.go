@@ -7,7 +7,7 @@ import (
 )
 
 type UserRepository interface {
-	Save(ctx context.Context, user model.User)
+	Save(ctx context.Context, user model.User) (string, error)
 	Update(ctx context.Context, user model.User)
 	Delete(ctx context.Context, userId string)
 	FindById(ctx context.Context, userId string) (model.User, error)

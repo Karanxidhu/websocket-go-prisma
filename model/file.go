@@ -2,10 +2,9 @@ package model
 
 import "time"
 
-type MediaFile struct {
+type File struct {
 	Id         string
 	Url        string
-	Type       string
 	UploadedAt time.Time
-	RoomId     string
+	RoomName     string
 }

@@ -8,7 +8,7 @@ import (
 )
 
 type UserService interface {
-	Save(ctx context.Context, user request.UserCreateReq)
+	Save(ctx context.Context, user request.UserCreateReq) string
 	Update(ctx context.Context, user request.UserUpdateReq)
 	Delete(ctx context.Context, userId string)
 	FindById(ctx context.Context, userId string) response.UserResponse

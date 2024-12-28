@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/karanxidhu/go-websocket/model"
 	"github.com/karanxidhu/go-websocket/prisma/db"
 )
@@ -18,6 +19,8 @@ func NewUserRespository(db *db.PrismaClient) *UserRepositoryImpl {
 	}
 }
 
+var secretKey = []byte("hjgdsajfsdakfhasdhfiao@!#!@$!$231231")
+
 func (p *UserRepositoryImpl) Delete(ctx context.Context, userId string) {
 	result, err := p.Db.User.FindUnique(db.User.ID.Equals(userId)).Delete().Exec(ctx)
 	if err != nil {
@@ -26,7 +29,7 @@ func (p *UserRepositoryImpl) Delete(ctx context.Context, userId string) {
 	fmt.Println("Rows affected: ", result)
 }
 
-func (p *UserRepositoryImpl) Save(ctx context.Context, user model.User) {
+func (p *UserRepositoryImpl) Save(ctx context.Context, user model.User) (string, error) {
 	result, err := p.Db.User.CreateOne(
 		db.User.Username.Set(user.Username),
 	).Exec(ctx)
@@ -34,7 +37,10 @@ func (p *UserRepositoryImpl) Save(ctx context.Context, user model.User) {
 		fmt.Println(err)
 		panic("unimplemented")
 	}
-	fmt.Println("Rows affected: ", result)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userID": result.ID,
+	})
+	return token.SignedString(secretKey)
 }
 
 func (p *UserRepositoryImpl) Update(ctx context.Context, user model.User) {
@@ -69,8 +75,7 @@ func (p *UserRepositoryImpl) FindById(ctx context.Context, userId string) (model
 	return userData, nil
 }
 
-
-func (p *UserRepositoryImpl) FindAll(ctx context.Context) []model.User {	
+func (p *UserRepositoryImpl) FindAll(ctx context.Context) []model.User {
 	result, err := p.Db.User.FindMany().Exec(ctx)
 	if err != nil {
 		panic("unimplemented")
@@ -78,10 +83,30 @@ func (p *UserRepositoryImpl) FindAll(ctx context.Context) []model.User {
 	var users []model.User
 	for _, user := range result {
 		users = append(users, model.User{
-			Id: user.ID,
+			Id:       user.ID,
 			Username: user.Username,
 		})
 	}
 	return users
 }
 
+func FindById(userId string, ctx context.Context, p *db.PrismaClient)(model.User, error) {
+	result, err := p.User.FindFirst(db.User.ID.Equals(userId)).Exec(ctx)
+	if err != nil {
+		fmt.Println("error is", err)
+		return model.User{}, fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	// Check if result is nil
+	if result == nil {
+		return model.User{}, fmt.Errorf("user not found")
+	}
+
+	// Map database result to the User model
+	userData := model.User{
+		Id:       result.ID,
+		Username: result.Username,
+	}
+
+	return userData, nil
+}

@@ -30,44 +30,87 @@ func NewClient(conn *websocket.Conn, manager *Manager) *Client {
 	}
 }
 
+// func (client *Client) readMessage() {
+// 	fmt.Println("reading message")
+// 	defer func() {
+// 		client.manager.removeClient(client)
+// 	}()
+
+// 	// if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+// 	// 	log.Println("Error setting read deadline:", err)
+// 	// }
+// 	client.conn.SetReadLimit(512)
+
+// 	// client.conn.SetPingHandler(client.pongHandler)
+
+// 	for {
+// 		_, msg, err := client.conn.ReadMessage()
+
+// 		if err != nil {
+// 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+// 				log.Println("Error reading message:", err)
+// 				client.room.removeClient(client)
+// 			}
+// 			break
+// 		}
+// 		fmt.Println("Received")
+// 		var request Event
+
+// 		if err := json.Unmarshal(msg, &request); err != nil {
+// 			fmt.Println(err)
+// 			break
+// 		}
+// 		if err := client.manager.routeEvent(request, client); err != nil {
+// 			fmt.Println(err)
+// 			break
+// 		}
+// 		client.room.broadcast(request, client)
+// 	}
+
+// }
+
 func (client *Client) readMessage() {
-	fmt.Println("reading message")
-	defer func() {
-		client.manager.removeClient(client)
-	}()
+    fmt.Println("Reading message")
+    defer func() {
+        client.manager.removeClient(client)
+        if client.room != nil {
+            client.room.removeClient(client)
+        }
+    }()
 
-	// if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-	// 	log.Println("Error setting read deadline:", err)
-	// }
-	client.conn.SetReadLimit(512)
+    client.conn.SetReadLimit(512)
 
-	// client.conn.SetPingHandler(client.pongHandler)
+    for {
+        _, msg, err := client.conn.ReadMessage()
+        if err != nil {
+            if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+                log.Println("Error reading message:", err)
+            }
+            break
+        }
 
-	for {
-		_, msg, err := client.conn.ReadMessage()
+        fmt.Println("Message received:", string(msg))
 
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Println("Error reading message:", err)
-				client.room.removeClient(client)
-			}
-			break
-		}
-		fmt.Println("Received")
-		var request Event
+        // Decode the incoming message
+        var request Event
+        if err := json.Unmarshal(msg, &request); err != nil {
+            log.Println("Error decoding message:", err)
+            continue
+        }
 
-		if err := json.Unmarshal(msg, &request); err != nil {
-			fmt.Println(err)
-			break
-		}
-		if err := client.manager.routeEvent(request, client); err != nil {
-			fmt.Println(err)
-			break
-		}
-		client.room.broadcast(request, client)
-	}
+        // Handle the event
+        if err := client.manager.routeEvent(request, client); err != nil {
+            log.Println("Error routing event:", err)
+            continue
+        }
 
+        // Broadcast the message to the room
+        if client.room != nil {
+            client.room.broadcast(request, client)
+        }
+    }
 }
+
 
 // func (client *Client) writeMessage() {
 // 	fmt.Println("writing message")
@@ -104,37 +147,73 @@ func (client *Client) readMessage() {
 // 		}
 // 	}
 // }
+// func (client *Client) writeMessage() {
+// 	defer func() {
+// 		client.manager.removeClient(client)
+// 		if client.room != nil {
+// 			client.room.removeClient(client)
+// 		}
+// 	}()
+
+// 	for {
+// 		select {
+// 		case message, ok := <-client.egress:
+// 			if !ok {
+// 				// Connection has been closed
+// 				if err := client.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
+// 					log.Println("Connection closed:", err)
+// 				}
+// 				return
+// 			}
+
+// 			// Serialize and send the message to the WebSocket
+// 			data, err := json.Marshal(message)
+// 			if err != nil {
+// 				log.Println("Error serializing message:", err)
+// 				return
+// 			}
+// 			if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+// 				log.Println("Error writing message:", err)
+// 				return
+// 			}
+// 		}
+// 	}
+// }
+
+
 func (client *Client) writeMessage() {
-	defer func() {
-		client.manager.removeClient(client)
-		if client.room != nil {
-			client.room.removeClient(client)
-		}
-	}()
+    defer func() {
+        client.manager.removeClient(client)
+        if client.room != nil {
+            client.room.removeClient(client)
+        }
+        client.conn.Close()
+    }()
 
-	for {
-		select {
-		case message, ok := <-client.egress:
-			if !ok {
-				// Connection has been closed
-				if err := client.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
-					log.Println("Connection closed:", err)
-				}
-				return
-			}
+    for {
+        select {
+        case message, ok := <-client.egress:
+            if !ok {
+                // Egress channel has been closed
+                if err := client.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
+                    log.Println("Connection closed:", err)
+                }
+                return
+            }
 
-			// Serialize and send the message to the WebSocket
-			data, err := json.Marshal(message)
-			if err != nil {
-				log.Println("Error serializing message:", err)
-				return
-			}
-			if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-				log.Println("Error writing message:", err)
-				return
-			}
-		}
-	}
+            // Serialize and send the message
+            data, err := json.Marshal(message)
+            if err != nil {
+                log.Println("Error serializing message, skipping:", err)
+                continue
+            }
+
+            if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+                log.Println("Error writing message:", err)
+                return
+            }
+        }
+    }
 }
 
 

@@ -11,7 +11,7 @@ generator db {
 
 model User {
   id        String   @id @default(cuid())
-  username  String   @unique
+  username  String   
   createdAt DateTime @default(now())
 }
 
@@ -19,15 +19,14 @@ model Room {
   id          String      @id @default(cuid())
   name        String
   createdAt   DateTime    @default(now())
-  mediaFiles  MediaFile[]
+  mediaFiles  MediaFile[] // No @relation attribute needed here
 }
 
 model MediaFile {
-  id        String   @id @default(cuid())
-  url       String   @unique
-  type      String   
-  uploadedAt DateTime @default(now())
-  roomId    String
-
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  url         String   @unique
+  uploadedAt  DateTime @default(now())
+  roomId      String?  // Make the roomId field nullable
+  room        Room?    @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }
+

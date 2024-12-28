@@ -1,11 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"crypto/rand"
 	"math/big"
 	"net/http"
 	"sync"
@@ -38,9 +38,9 @@ func getOrCreateRoom(name string) *Room {
 
 	if name == "" {
 		random, err := RandomString(10)
-			if err != nil {
+		if err != nil {
 			panic(err)
-			}
+		}
 		name = random
 	}
 	fmt.Println("get or create room")
@@ -67,6 +67,10 @@ func (room *Room) broadcast(message Event, sender *Client) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
+	if(message.Type == WelcomeEvent) {
+		sender.egress <- message
+	}
+
 	for client := range room.clients {
 		if client == sender {
 			continue // Skip the sender
@@ -77,6 +81,16 @@ func (room *Room) broadcast(message Event, sender *Client) {
 		}
 	}
 }
+
+// func (room *Room) welcome(client *Client) {
+// 	fmt.Printf("Welcome to room: %s\n", room.name)
+// 	room.mu.Lock()
+// 	defer room.mu.Unlock()
+// 	client.egress <- Event{
+// 		Type:    WelcomeEvent,
+// 		Payload: []byte(fmt.Sprintf("Welcome to the room: %s", room.name)),
+// 	}
+// }
 
 type Manager struct {
 	clients ClientList
@@ -104,11 +118,46 @@ func (m *Manager) routeEvent(event Event, client *Client) error {
 	}
 }
 
-
 func (m *Manager) setupEventHandlers() {
 	m.handlers[JoinEvent] = HandleJoin
 	// m.handlers[LeaveEvent] = HandleLeave
 	m.handlers[MessageEvent] = HandleMessage
+	m.handlers[File] = HandleFile
+}
+
+func HandleFile(event Event, client *Client) error {
+	var file struct {
+		AuthToken string `json:"authToken"`
+		FileLink  string `json:"fileLink"`
+	}
+	if err := json.Unmarshal(event.Payload, &file); err != nil {
+		log.Println("Invalid file event:", err)
+		return err
+	}
+	if file.AuthToken == "" {
+		return errors.New("auth token is required")
+	}
+
+	type Filer struct {
+		FileLink string `json:"fileLink"`
+	}
+
+	newFile := Filer{
+		FileLink: file.FileLink,
+	}
+
+	jsonData, err := json.Marshal(newFile)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+
+	newEvent := Event{
+		Type:    File,
+		Payload: jsonData,
+	}
+
+	client.room.broadcast(newEvent, client) // Pass client as sender to avoid echoing back
+	return nil
 }
 
 func HandleMessage(event Event, client *Client) error {
@@ -119,11 +168,9 @@ func HandleMessage(event Event, client *Client) error {
 		log.Println("Invalid message event:", err)
 		return err
 	}
-
 	client.room.broadcast(event, client) // Pass client as sender to avoid echoing back
 	return nil
 }
-
 
 func HandleJoin(event Event, client *Client) error {
 	var join struct {
@@ -149,6 +196,9 @@ func HandleJoin(event Event, client *Client) error {
 func (m *Manager) servesWs(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("new connection recieved")
 	roomName := r.URL.Query().Get("room")
+	userName := r.URL.Query().Get("name")
+
+	fmt.Println("user name: ", userName)
 	if roomName == "" {
 		fmt.Println("Room name is required")
 	}
@@ -165,13 +215,17 @@ func (m *Manager) servesWs(w http.ResponseWriter, r *http.Request) {
 
 	room := getOrCreateRoom(roomName)
 	client.room = room
-
+	
 	room.mu.Lock()
 	room.clients[client] = true
 	room.mu.Unlock()
+	go client.writeMessage()
+
+	// room.welcome(client)
+	room.broadcast(Event{Type: JoinEvent, Payload: []byte(`{"name": "` + room.name + `", "username": "` + userName + `"}`)}, client)
+	// room.broadcast(Event{Type: WelcomeEvent, Payload: []byte(fmt.Sprintf("Welcome to the room: %s", room.name))}, client)
 
 	go client.readMessage()
-	go client.writeMessage()
 }
 
 func (m *Manager) addClient(client *Client) {

@@ -18,12 +18,16 @@ func NewUserServiceImpl(userRespository repository.UserRepository) *UserResposit
 	return &UserRespositoryImpl{UserRespository: userRespository}
 }
 
-func (p *UserRespositoryImpl) Save(ctx context.Context, user request.UserCreateReq){
+func (p *UserRespositoryImpl) Save(ctx context.Context, user request.UserCreateReq)(string){
 	userData := model.User{
 		Username: user.Username,
 	}
 	fmt.Println(userData)
-	p.UserRespository.Save(ctx, userData)
+	token , err := p.UserRespository.Save(ctx, userData)
+	if err != nil {	
+		panic("unimplemented")
+	}
+	return token
 }
 
 func (p * UserRespositoryImpl) Update(ctx context.Context, user request.UserUpdateReq){
