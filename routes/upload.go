@@ -104,6 +104,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		Url:        fileURL,
 		UploadedAt: time.Now(),
 		RoomName:   RoomName,
+		UserName:   user.Username,
 	}
 
 	repository.SaveFile(r.Context(), fileData, config.Db)

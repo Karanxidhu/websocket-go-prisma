@@ -19,14 +19,16 @@ model Room {
   id          String      @id @default(cuid())
   name        String
   createdAt   DateTime    @default(now())
-  mediaFiles  MediaFile[] // No @relation attribute needed here
+  mediaFiles  MediaFile[]
 }
 
 model MediaFile {
   id          String   @id @default(cuid())
-  url         String   @unique
+  url         String?   @unique
   uploadedAt  DateTime @default(now())
   roomId      String?  // Make the roomId field nullable
+  message     String?
   room        Room?    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userName    String  @default("bot")
 }
 

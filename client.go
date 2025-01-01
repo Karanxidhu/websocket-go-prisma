@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -20,205 +19,93 @@ type Client struct {
 	manager *Manager
 	room    *Room
 	egress  chan Event
+	name    string
 }
 
-func NewClient(conn *websocket.Conn, manager *Manager) *Client {
+func NewClient(conn *websocket.Conn, manager *Manager, userName string) *Client {
 	return &Client{
 		conn:    conn,
 		manager: manager,
-		egress:  make(chan Event),
+		egress:  make(chan Event, 10),
+		name:    userName,
 	}
 }
 
-// func (client *Client) readMessage() {
-// 	fmt.Println("reading message")
-// 	defer func() {
-// 		client.manager.removeClient(client)
-// 	}()
-
-// 	// if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-// 	// 	log.Println("Error setting read deadline:", err)
-// 	// }
-// 	client.conn.SetReadLimit(512)
-
-// 	// client.conn.SetPingHandler(client.pongHandler)
-
-// 	for {
-// 		_, msg, err := client.conn.ReadMessage()
-
-// 		if err != nil {
-// 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-// 				log.Println("Error reading message:", err)
-// 				client.room.removeClient(client)
-// 			}
-// 			break
-// 		}
-// 		fmt.Println("Received")
-// 		var request Event
-
-// 		if err := json.Unmarshal(msg, &request); err != nil {
-// 			fmt.Println(err)
-// 			break
-// 		}
-// 		if err := client.manager.routeEvent(request, client); err != nil {
-// 			fmt.Println(err)
-// 			break
-// 		}
-// 		client.room.broadcast(request, client)
-// 	}
-
-// }
-
-func (client *Client) readMessage() {
-    fmt.Println("Reading message")
-    defer func() {
-        client.manager.removeClient(client)
-        if client.room != nil {
-            client.room.removeClient(client)
-        }
-    }()
-
-    client.conn.SetReadLimit(512)
-
-    for {
-        _, msg, err := client.conn.ReadMessage()
-        if err != nil {
-            if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-                log.Println("Error reading message:", err)
-            }
-            break
-        }
-
-        fmt.Println("Message received:", string(msg))
-
-        // Decode the incoming message
-        var request Event
-        if err := json.Unmarshal(msg, &request); err != nil {
-            log.Println("Error decoding message:", err)
-            continue
-        }
-
-        // Handle the event
-        if err := client.manager.routeEvent(request, client); err != nil {
-            log.Println("Error routing event:", err)
-            continue
-        }
-
-        // Broadcast the message to the room
-        if client.room != nil {
-            client.room.broadcast(request, client)
-        }
-    }
+func (client *Client) send(event Event) {
+	select {
+	case client.egress <- event:
+		// Successfully sent to the egress channel
+	default:
+		log.Printf("Egress channel full, dropping message for client %s", client.name)
+	}
 }
 
 
-// func (client *Client) writeMessage() {
-// 	fmt.Println("writing message")
-// 	defer func() {
-// 		client.manager.removeClient(client)
-// 	}()
+func (client *Client) readMessage() {
+	defer func() {
+		log.Printf("Closing client connection for user: %s", client.name)
+		client.manager.removeClient(client)
+		if client.room != nil {
+			client.room.removeClient(client)
+		}
+		client.conn.Close()
+	}()
 
-// 	// ticker := time.NewTicker(pingPeriod)
+	client.conn.SetReadLimit(512)
 
-// 	for {
-// 		select {
-// 		case message, ok := <-client.egress:
-// 			if !ok {
-// 				if err := client.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
-// 					log.Println(" connection closed: ", err)
-// 				}
-// 				return
-// 			}
-// 			data, err := json.Marshal(message)
-// 			if err != nil {
-// 				log.Println(err)
-// 				return
-// 			}
-// 			if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-// 				log.Println("Error writing message:", err)
-// 				return
-// 			}
+	for {
+		_, msg, err := client.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Println("Unexpected close error:", err)
+			}
+			log.Printf("Client %s disconnected, removing from manager and room.", client.name)
+			break
+		}
 
-// 			// case <-ticker.C:
-// 			// 	if err := client.conn.WriteMessage(websocket.PingMessage, []byte(``)); err != nil {
-// 			// 		log.Println("Error writing message ping:", err)
-// 			// 		return
-// 			// 	}
-// 		}
-// 	}
-// }
-// func (client *Client) writeMessage() {
-// 	defer func() {
-// 		client.manager.removeClient(client)
-// 		if client.room != nil {
-// 			client.room.removeClient(client)
-// 		}
-// 	}()
+		var request Event
+		if err := json.Unmarshal(msg, &request); err != nil {
+			log.Println("Error decoding message:", err)
+			continue
+		}
 
-// 	for {
-// 		select {
-// 		case message, ok := <-client.egress:
-// 			if !ok {
-// 				// Connection has been closed
-// 				if err := client.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
-// 					log.Println("Connection closed:", err)
-// 				}
-// 				return
-// 			}
+		// Handle the event
+		if err := client.manager.routeEvent(request, client); err != nil {
+			log.Println("Error routing event:", err)
+			continue
+		}
+	}
 
-// 			// Serialize and send the message to the WebSocket
-// 			data, err := json.Marshal(message)
-// 			if err != nil {
-// 				log.Println("Error serializing message:", err)
-// 				return
-// 			}
-// 			if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-// 				log.Println("Error writing message:", err)
-// 				return
-// 			}
-// 		}
-// 	}
-// }
-
+}
 
 func (client *Client) writeMessage() {
-    defer func() {
-        client.manager.removeClient(client)
-        if client.room != nil {
-            client.room.removeClient(client)
-        }
-        client.conn.Close()
-    }()
-
+	defer func() {
+		log.Printf("Closing client connection for user: %s", client.name)
+		client.manager.removeClient(client)
+		if client.room != nil {
+			client.room.removeClient(client)
+		}
+		client.conn.Close()
+	}()
     for {
         select {
         case message, ok := <-client.egress:
             if !ok {
-                // Egress channel has been closed
-                if err := client.conn.WriteMessage(websocket.CloseMessage, nil); err != nil {
-                    log.Println("Connection closed:", err)
-                }
+                log.Printf("Egress channel closed for client %s.", client.name)
                 return
             }
-
-            // Serialize and send the message
+    
             data, err := json.Marshal(message)
             if err != nil {
-                log.Println("Error serializing message, skipping:", err)
+                log.Println("Error serializing message:", err)
                 continue
             }
-
+    
             if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-                log.Println("Error writing message:", err)
+                log.Printf("Error writing message for client %s: %v", client.name, err)
                 return
             }
         }
     }
+    
 }
-
-
-
-// func (client *Client) pongHandler(appData string) error {
-// 	client.conn.SetReadDeadline(time.Now().Add(pongWait))
-// 	return nil
-// }

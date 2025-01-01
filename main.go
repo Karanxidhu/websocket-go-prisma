@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/karanxidhu/go-websocket/config"
 	"github.com/karanxidhu/go-websocket/controller"
@@ -12,15 +13,14 @@ import (
 	"github.com/karanxidhu/go-websocket/service"
 )
 
-
 func main() {
 	Db, err := config.ConnectToDB()
 	userRespository := repository.NewUserRespository(Db)
 	fileRespository := repository.NewFileRepository(Db)
-	
+
 	userService := service.NewUserServiceImpl(userRespository)
 	fileService := service.NewFileServiceImpl(fileRespository)
-	
+
 	userController := controller.NewUserController(userService)
 	fileController := controller.NewFileController(fileService)
 
@@ -29,8 +29,13 @@ func main() {
 		log.Fatal(err)
 	}
 	defer Db.Prisma.Disconnect()
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"http://localhost:3000"}),                   // Frontend URL
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}), // Allowed methods
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),           // Allowed headers
+	)
 
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(":8080", corsHandler(router)))
 }
 
 func setupRoutes(userController *controller.UserController, fileController *controller.FileController) *mux.Router {
@@ -44,6 +49,7 @@ func setupRoutes(userController *controller.UserController, fileController *cont
 	router.HandleFunc("/api/users/{userId}", userController.Update).Methods("PUT")
 	router.HandleFunc("/api/users/{userId}", userController.Delete).Methods("DELETE")
 	router.HandleFunc("/api/upload", routes.UploadHandler).Methods("POST")
+	router.HandleFunc("/api/chat/{roomName}", fileController.GetChat).Methods("GET")
 
 	router.HandleFunc("/api/files/add", fileController.SaveFile).Methods("POST")
 

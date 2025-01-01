@@ -28,3 +28,7 @@ func (p *FileServiceImpl) Save(ctx context.Context, file request.FileResponse) {
 	fmt.Println("reached service")
 	p.FileRepository.Save(ctx, fileData)
 }
+
+func (p *FileServiceImpl) GetChat(ctx context.Context, roomName string) (interface{}, error) {
+	return p.FileRepository.GetChat(ctx, roomName)
+}

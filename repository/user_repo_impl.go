@@ -90,7 +90,7 @@ func (p *UserRepositoryImpl) FindAll(ctx context.Context) []model.User {
 	return users
 }
 
-func FindById(userId string, ctx context.Context, p *db.PrismaClient)(model.User, error) {
+func FindById(userId string, ctx context.Context, p *db.PrismaClient) (model.User, error) {
 	result, err := p.User.FindFirst(db.User.ID.Equals(userId)).Exec(ctx)
 	if err != nil {
 		fmt.Println("error is", err)
@@ -109,4 +109,71 @@ func FindById(userId string, ctx context.Context, p *db.PrismaClient)(model.User
 	}
 
 	return userData, nil
+}
+
+// AddRoomMember adds a user to the members of a specified room. If the room
+// does not exist, it creates the room first. It uses the roomName to find 
+// the room and appends the userName to the room's members. Any errors 
+// encountered during the process are logged to the console.
+func AddRoomMember(userName string, roomName string, ctx context.Context, p *db.PrismaClient) {
+	result, err := p.Room.FindFirst(db.Room.Name.Equals(roomName)).Exec(ctx)
+	if err != nil {
+		fmt.Println("error is", err)
+	}
+	if result == nil {
+		result, err = p.Room.CreateOne(
+			db.Room.Name.Set(roomName),
+		).Exec(ctx)
+		fmt.Println("room created")
+		if err != nil {
+			fmt.Println("failed to create room", err)
+		}
+	}
+	result, err = p.Room.FindUnique(
+		db.Room.ID.Equals(result.ID), // Find the room by its unique ID
+	).Update(
+		db.Room.Members.Push([]string{userName}), // Append the new userId to the Members array
+	).Exec(ctx)
+	if err != nil {
+		fmt.Println("error is", err)
+		panic("unimplemented")
+	}
+	fmt.Println("Rows affected: ", result)
+}
+
+func RemoveMember(userName string, roomName string, ctx context.Context, p *db.PrismaClient) {
+	result, err := p.Room.FindFirst(
+		db.Room.Name.Equals(roomName), // Find the room by its unique ID
+	).Exec(ctx)
+	
+	if err != nil {
+		// Handle the error
+		fmt.Printf("Error finding room: %v\n", err)
+		return
+	}
+	
+	// Remove the target userID from the Members array
+	updatedMembers := []string{}
+	for _, member := range result.Members {
+		if member != userName {
+			updatedMembers = append(updatedMembers, member)
+		}
+	}
+	
+	// Update the Members array in the database
+	result, err = p.Room.FindUnique(
+		db.Room.ID.Equals(result.ID),
+	).Update(
+		db.Room.Members.Set(updatedMembers), // Replace the Members array with the updated array
+	).Exec(ctx)
+	
+	if err != nil {
+		// Handle the error
+		fmt.Printf("Error updating room members: %v\n", err)
+		return
+	}
+	
+	fmt.Println("Updated room members:", result)
+	
+
 }

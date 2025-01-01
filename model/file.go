@@ -7,4 +7,6 @@ type File struct {
 	Url        string
 	UploadedAt time.Time
 	RoomName     string
+	Message		string
+	UserName	string
 }

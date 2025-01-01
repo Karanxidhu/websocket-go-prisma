@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,9 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/karanxidhu/go-websocket/config"
+	"github.com/karanxidhu/go-websocket/model"
+	"github.com/karanxidhu/go-websocket/repository"
 )
 
 var (
@@ -34,7 +38,12 @@ func RandomString(length int) (string, error) {
 	}
 	return string(b), nil
 }
-func getOrCreateRoom(name string) *Room {
+
+var roomMutex sync.Mutex
+
+func getOrCreateRoom(name string, userName string) *Room {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
 
 	if name == "" {
 		random, err := RandomString(10)
@@ -43,9 +52,8 @@ func getOrCreateRoom(name string) *Room {
 		}
 		name = random
 	}
-	fmt.Println("get or create room")
+
 	if room, exists := rooms[name]; exists {
-		fmt.Println("room joined with name: ", name)
 		return room
 	}
 	room := &Room{
@@ -53,7 +61,6 @@ func getOrCreateRoom(name string) *Room {
 		name:    name,
 	}
 	rooms[name] = room
-	fmt.Println("room created with name: ", name)
 	return room
 }
 
@@ -67,7 +74,7 @@ func (room *Room) broadcast(message Event, sender *Client) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	if(message.Type == WelcomeEvent) {
+	if message.Type == WelcomeEvent {
 		sender.egress <- message
 	}
 
@@ -80,6 +87,18 @@ func (room *Room) broadcast(message Event, sender *Client) {
 		default:
 		}
 	}
+}
+func (room *Room) GetParticipants() []string {
+	room.mu.Lock()
+	defer room.mu.Unlock()
+
+	// Collect the names of all clients in the room
+	clientNames := []string{}
+	for client := range room.clients {
+		clientNames = append(clientNames, client.name)
+	}
+
+	return clientNames
 }
 
 // func (room *Room) welcome(client *Client) {
@@ -162,34 +181,64 @@ func HandleFile(event Event, client *Client) error {
 
 func HandleMessage(event Event, client *Client) error {
 	var msg struct {
-		Message string `json:"message"`
+		Message  string `json:"message"`
+		RoomName string `json:"roomName"`
+		UserName string `json:"userName"`
 	}
 	if err := json.Unmarshal(event.Payload, &msg); err != nil {
 		log.Println("Invalid message event:", err)
 		return err
 	}
+
+	message := model.File{
+		Message:  msg.Message,
+		RoomName: msg.RoomName,
+		UserName: msg.UserName,
+	}
+
 	client.room.broadcast(event, client) // Pass client as sender to avoid echoing back
+	err := repository.SaveMsg(context.Background(), message, config.Db)
+
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+
 	return nil
 }
 
 func HandleJoin(event Event, client *Client) error {
 	var join struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		UserName string `json:"username"`
 	}
 	if err := json.Unmarshal(event.Payload, &join); err != nil {
 		log.Println("Invalid join event:", err)
 		return err
 	}
 
-	room := getOrCreateRoom(join.Name)
+	room := getOrCreateRoom(join.Name, join.UserName)
 	client.room = room
 
 	room.mu.Lock()
 	room.clients[client] = true
 	room.mu.Unlock()
 
+	var pay struct {
+		Name       string   `json:"name"`
+		UserName   string   `json:"username"`
+		Paticipant []string `json:"paticipant"`
+	}
+	pay.Name = join.Name
+	pay.UserName = join.UserName
+	pay.Paticipant = room.GetParticipants()
+
+	joined := Event{}
+	joined.Type = JoinEvent
+	joined.Payload, _ = json.Marshal(pay)
+
 	log.Println("Client joined room: ", join.Name)
-	client.room.broadcast(event, client)
+	log.Println(joined)
+	client.room.broadcast(joined, client)
 	return nil
 }
 
@@ -210,22 +259,36 @@ func (m *Manager) servesWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewClient(ws, m)
+	client := NewClient(ws, m, userName)
 	m.addClient(client)
 
-	room := getOrCreateRoom(roomName)
+	room := getOrCreateRoom(roomName, userName)
 	client.room = room
-	
+
 	room.mu.Lock()
 	room.clients[client] = true
 	room.mu.Unlock()
 	go client.writeMessage()
 
+	payload, _ := json.Marshal(map[string]interface{}{
+		"username":     userName,
+		"name":         roomName,
+		"participants": room.GetParticipants(), // Add the array of participants
+	})
+	
+	// Send the welcome message to the client
+	welcomeMsg := Event{
+		Type:    JoinEvent,
+		Payload: json.RawMessage(payload),
+	}
+	
+	client.send(welcomeMsg)
+
 	// room.welcome(client)
-	room.broadcast(Event{Type: JoinEvent, Payload: []byte(`{"name": "` + room.name + `", "username": "` + userName + `"}`)}, client)
+	go client.readMessage()
+	room.broadcast(welcomeMsg, client)
 	// room.broadcast(Event{Type: WelcomeEvent, Payload: []byte(fmt.Sprintf("Welcome to the room: %s", room.name))}, client)
 
-	go client.readMessage()
 }
 
 func (m *Manager) addClient(client *Client) {
@@ -236,12 +299,12 @@ func (m *Manager) addClient(client *Client) {
 }
 
 func (m *Manager) removeClient(client *Client) {
+	log.Printf("Removing client: %s", client.name)
 	m.Lock()
 	defer m.Unlock()
-	if _, ok := m.clients[client]; ok {
-		client.conn.Close()
+	if _, exists := m.clients[client]; exists {
 		delete(m.clients, client)
-		log.Println("Client removed from manager.")
+		client.conn.Close()
 	}
 }
 
@@ -250,6 +313,7 @@ func (room *Room) removeClient(client *Client) {
 	defer room.mu.Unlock()
 	if _, exists := room.clients[client]; exists {
 		delete(room.clients, client)
-		log.Println("Client removed from room:", room.name)
+		log.Println("Client removed from room:", room.name, "user name:", client.name)
 	}
+	repository.RemoveMember(client.name, room.name, context.Background(), config.Db)
 }
