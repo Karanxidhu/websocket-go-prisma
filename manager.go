@@ -41,7 +41,7 @@ func RandomString(length int) (string, error) {
 
 var roomMutex sync.Mutex
 
-func getOrCreateRoom(name string, userName string) *Room {
+func getOrCreateRoom(name string) *Room {
 	roomMutex.Lock()
 	defer roomMutex.Unlock()
 
@@ -216,7 +216,7 @@ func HandleJoin(event Event, client *Client) error {
 		return err
 	}
 
-	room := getOrCreateRoom(join.Name, join.UserName)
+	room := getOrCreateRoom(join.Name)
 	client.room = room
 
 	room.mu.Lock()
@@ -262,7 +262,7 @@ func (m *Manager) servesWs(w http.ResponseWriter, r *http.Request) {
 	client := NewClient(ws, m, userName)
 	m.addClient(client)
 
-	room := getOrCreateRoom(roomName, userName)
+	room := getOrCreateRoom(roomName)
 	client.room = room
 
 	room.mu.Lock()
@@ -275,13 +275,13 @@ func (m *Manager) servesWs(w http.ResponseWriter, r *http.Request) {
 		"name":         roomName,
 		"participants": room.GetParticipants(), // Add the array of participants
 	})
-	
+
 	// Send the welcome message to the client
 	welcomeMsg := Event{
 		Type:    JoinEvent,
 		Payload: json.RawMessage(payload),
 	}
-	
+
 	client.send(welcomeMsg)
 
 	// room.welcome(client)
@@ -315,5 +315,5 @@ func (room *Room) removeClient(client *Client) {
 		delete(room.clients, client)
 		log.Println("Client removed from room:", room.name, "user name:", client.name)
 	}
-	repository.RemoveMember(client.name, room.name, context.Background(), config.Db)
+	// repository.RemoveMember(client.name, room.name, context.Background(), config.Db)
 }

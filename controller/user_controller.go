@@ -141,9 +141,15 @@ func (controller *UserController) Profile(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Unable to find user", http.StatusBadRequest)
 		return
 	}
+
+	 var userwoid struct {
+		Username string `json:"username"`
+	}
+	userwoid.Username = user.Username
+
 	helper.WriteResponse(w, response.WebResponse{
 		Code:    200,
 		Message: "OK",
-		Data:    user,
+		Data:    userwoid,
 	})
 }

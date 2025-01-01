@@ -50,7 +50,7 @@ func setupRoutes(userController *controller.UserController, fileController *cont
 	router.HandleFunc("/api/users/{userId}", userController.Delete).Methods("DELETE")
 	router.HandleFunc("/api/upload", routes.UploadHandler).Methods("POST")
 	router.HandleFunc("/api/chat/{roomName}", fileController.GetChat).Methods("GET")
-
+	router .HandleFunc("/api/users/profile", userController.Profile).Methods("POST")
 	router.HandleFunc("/api/files/add", fileController.SaveFile).Methods("POST")
 
 	return router

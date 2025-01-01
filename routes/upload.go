@@ -86,6 +86,12 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		http.Error(w, "Unable to get file", http.StatusBadRequest)
+		fmt.Println("File is required")
+		return
+	}
+	if file == nil {
+		http.Error(w, "File is required", http.StatusBadRequest)
+		fmt.Println("File is required")
 		return
 	}
 
