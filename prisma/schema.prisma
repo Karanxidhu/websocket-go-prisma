@@ -24,7 +24,6 @@ model Room {
 
 model MediaFile {
   id          String   @id @default(cuid())
-  url         String?   @unique
   uploadedAt  DateTime @default(now())
   roomId      String?  // Make the roomId field nullable
   message     String?

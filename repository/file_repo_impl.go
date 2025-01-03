@@ -41,7 +41,7 @@ func (p *FileRepositoryImpl) Save(ctx context.Context, file model.File) error {
 
 	// Create a MediaFile linked to the Room
 	result, err := p.Db.MediaFile.CreateOne(
-		db.MediaFile.URL.Set(file.Url),
+		db.MediaFile.Message.Set(file.Url),
 		db.MediaFile.Room.Link(db.Room.ID.Equals(res.ID)),
 	).Exec(ctx)
 	if err != nil {
@@ -106,7 +106,7 @@ func SaveFile(ctx context.Context, file model.File, p *db.PrismaClient) error {
 
 	// Create a MediaFile linked to the Room
 	result, err := p.MediaFile.CreateOne(
-		db.MediaFile.URL.Set(file.Url),
+		db.MediaFile.Message.Set(file.Message),
 		db.MediaFile.UserName.Set(file.UserName),
 		db.MediaFile.Room.Link(db.Room.ID.Equals(res.ID)),
 	).Exec(ctx)

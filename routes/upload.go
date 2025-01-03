@@ -107,7 +107,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	fileURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", S3_BUCKET_NAME, S3_REGION, fileKey)
 
 	fileData := model.File{
-		Url:        fileURL,
+		Message:        fileURL,
 		UploadedAt: time.Now(),
 		RoomName:   RoomName,
 		UserName:   user.Username,

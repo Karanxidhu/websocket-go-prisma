@@ -197,11 +197,12 @@ func HandleMessage(event Event, client *Client) error {
 	}
 
 	client.room.broadcast(event, client) // Pass client as sender to avoid echoing back
-	err := repository.SaveMsg(context.Background(), message, config.Db)
-
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
+	go func() {
+		err := repository.SaveMsg(context.Background(), message, config.Db)
+		if err != nil {
+			fmt.Println("Error:", err)
+		}
+	}()
 
 	return nil
 }
