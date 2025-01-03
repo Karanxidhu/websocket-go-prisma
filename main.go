@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -52,8 +53,11 @@ func setupRoutes(userController *controller.UserController, fileController *cont
 	router.HandleFunc("/api/chat/{roomName}", fileController.GetChat).Methods("GET")
 	router .HandleFunc("/api/users/profile", userController.Profile).Methods("POST")
 	router.HandleFunc("/api/files/add", fileController.SaveFile).Methods("POST")
-
+	router.HandleFunc("/env", Getenv).Methods("GET")
 	return router
+}
+func Getenv(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(os.Getenv("TEST")))
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {

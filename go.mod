@@ -14,11 +14,11 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 )
 
 require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )
