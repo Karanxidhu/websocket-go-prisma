@@ -31,9 +31,9 @@ func main() {
 	}
 	defer Db.Prisma.Disconnect()
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"http://localhost:3000"}),                   // Frontend URL
-		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}), // Allowed methods
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),           // Allowed headers
+		handlers.AllowedOrigins([]string{"http://localhost:3000", "https://chaygger.karanxd.space"}), // Frontend URL
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),                 // Allowed methods
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),                           // Allowed headers
 	)
 
 	log.Fatal(http.ListenAndServe(":8080", corsHandler(router)))
@@ -51,7 +51,7 @@ func setupRoutes(userController *controller.UserController, fileController *cont
 	router.HandleFunc("/api/users/{userId}", userController.Delete).Methods("DELETE")
 	router.HandleFunc("/api/upload", routes.UploadHandler).Methods("POST")
 	router.HandleFunc("/api/chat/{roomName}", fileController.GetChat).Methods("GET")
-	router .HandleFunc("/api/users/profile", userController.Profile).Methods("POST")
+	router.HandleFunc("/api/users/profile", userController.Profile).Methods("POST")
 	router.HandleFunc("/api/files/add", fileController.SaveFile).Methods("POST")
 	router.HandleFunc("/env", Getenv).Methods("GET")
 	return router
